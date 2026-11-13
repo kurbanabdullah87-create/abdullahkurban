@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792655271946,
+      "tag": "0000_core_finance",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792735442591,
+      "tag": "0001_operational_modules",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792735525296,
+      "tag": "0002_media_and_member_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792735600000,
+      "tag": "0003_machine_hours_and_maintenance",
+      "breakpoints": true
+    }
+  ]
+}
