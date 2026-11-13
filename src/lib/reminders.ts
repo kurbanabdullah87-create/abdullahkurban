@@ -55,6 +55,7 @@ export async function enableAppointmentPush(): Promise<void> {
       endpoint: subscription.endpoint,
       p256dh,
       auth,
+      keys: { p256dh, auth },
       subscription: {
         endpoint: subscription.endpoint,
         keys: { p256dh, auth },
