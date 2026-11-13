@@ -14,7 +14,7 @@ import { useCustomers } from "@/lib/data";
 import { formatDate, todayISO } from "@/lib/finance";
 import { useMembers } from "@/lib/job-fields";
 import { persistWrite } from "@/lib/offline";
-import { REMIND_OPTIONS, apptStart, askNotifyPermission, notifySupported } from "@/lib/reminders";
+import { REMIND_OPTIONS, apptStart, enableAppointmentPush, notifySupported } from "@/lib/reminders";
 import { whatsappLink } from "@/lib/templates";
 import { appointmentReminderText } from "@/lib/statement";
 import { pageHead, useRecords, useSaveRecord, validateJobForm, type Payload, type WorkRecord } from "@/lib/work";
@@ -49,6 +49,8 @@ function Appointments() {
   const [job, setJob] = useState<{ appt: WorkRecord; form: Payload } | null>(null);
   const [now, setNow] = useState(Date.now());
   const [perm, setPerm] = useState(notifySupported() ? Notification.permission : "denied");
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
@@ -201,15 +203,36 @@ function Appointments() {
         </Button>
       </div>
 
-      {notifySupported() && perm !== "granted" && (
+      {notifySupported() && (
         <Button
           variant="secondary"
           className="w-full"
-          disabled={perm === "denied"}
-          onClick={async () => setPerm(await askNotifyPermission())}
+          disabled={perm === "denied" || pushBusy || pushEnabled}
+          onClick={async () => {
+            setPushBusy(true);
+            try {
+              await enableAppointmentPush();
+              setPerm("granted");
+              setPushEnabled(true);
+              toast.success("Randevu bildirimleri bu cihaza bağlandı.");
+            } catch (error) {
+              setPerm(Notification.permission);
+              toast.error(error instanceof Error ? error.message : "Bildirim kaydı yapılamadı.");
+            } finally {
+              setPushBusy(false);
+            }
+          }}
         >
           <Bell />
-          {perm === "denied" ? "Bildirimler tarayıcı ayarlarından engelli" : "Randevu bildirimlerini aç"}
+          {pushEnabled
+            ? "Randevu bildirimleri bu cihazda açık"
+            : perm === "denied"
+              ? "Bildirimler tarayıcı ayarlarından engelli"
+              : pushBusy
+                ? "Bildirimler etkinleştiriliyor…"
+                : perm === "granted"
+                  ? "Randevu bildirim kaydını tamamla"
+                  : "Randevu bildirimlerini aç"}
         </Button>
       )}
 
