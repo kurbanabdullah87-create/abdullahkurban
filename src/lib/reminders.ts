@@ -1,4 +1,63 @@
 import { useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+
+function decodeVapidPublicKey(value: string): Uint8Array {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+  const raw = atob(padded);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
+  return bytes;
+}
+
+function bufferToBase64Url(value: ArrayBuffer | null): string {
+  if (!value) throw new Error("Tarayıcı bildirim anahtarını oluşturamadı.");
+  const bytes = new Uint8Array(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+}
+
+/** Kullanıcının cihazını Supabase Web Push servisine kaydeder. */
+export async function enableAppointmentPush(): Promise<void> {
+  if (!notifySupported()) throw new Error("Bu tarayıcı bildirimleri desteklemiyor.");
+  if (!("serviceWorker" in navigator)) throw new Error("Bu tarayıcı arka plan bildirimlerini desteklemiyor.");
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") throw new Error("Bildirim izni verilmedi.");
+
+  const registration = await navigator.serviceWorker.ready;
+  if (!registration.pushManager) {
+    throw new Error("Bu cihazda Push bildirimi desteklenmiyor. iPhone'da uygulamayı Ana Ekran'a ekleyip oradan açın.");
+  }
+
+  const { data: keyData, error: keyError } = await supabase.functions.invoke("send-appointment-reminders", {
+    body: { action: "public-key" },
+  });
+  if (keyError) throw keyError;
+  const publicKey = typeof keyData?.publicKey === "string" ? keyData.publicKey : "";
+  if (!publicKey) throw new Error("Sunucu bildirim anahtarını döndürmedi.");
+
+  const subscription =
+    (await registration.pushManager.getSubscription()) ??
+    (await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: decodeVapidPublicKey(publicKey),
+    }));
+
+  const p256dh = bufferToBase64Url(subscription.getKey("p256dh"));
+  const auth = bufferToBase64Url(subscription.getKey("auth"));
+  const { error: saveError } = await supabase.functions.invoke("send-appointment-reminders", {
+    body: {
+      action: "subscribe",
+      endpoint: subscription.endpoint,
+      p256dh,
+      auth,
+    },
+  });
+  if (saveError) throw saveError;
+}
+
 import { toast } from "sonner";
 import { useRecords, type Payload } from "@/lib/work";
 
