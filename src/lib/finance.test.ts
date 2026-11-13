@@ -66,6 +66,7 @@ describe("templates & auth", () => {
     expect(normalizePhone("0532 111 22 33")).toBe("905321112233");
   });
   it("kullanıcı adı Türkçe karakterden arındırılır", () => {
-    expect(usernameToEmail("Şükrü")).toBe("sukru@saha.local");
+    const domain = new URL(import.meta.env.VITE_SUPABASE_URL).hostname;
+    expect(usernameToEmail("Şükrü")).toBe(`sukru@${domain}`);
   });
 });
