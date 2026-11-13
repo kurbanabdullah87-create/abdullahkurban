@@ -53,6 +53,18 @@ function Appointments() {
   const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
+    let active = true;
+    if (!notifySupported() || Notification.permission !== "granted" || !("serviceWorker" in navigator)) {
+      return () => { active = false; };
+    }
+    void navigator.serviceWorker.ready
+      .then((registration) => registration.pushManager.getSubscription())
+      .then((subscription) => { if (active) setPushEnabled(Boolean(subscription)); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
