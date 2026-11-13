@@ -1,5 +1,3 @@
-import { useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 
 function decodeVapidPublicKey(value: string): Uint8Array {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -58,7 +56,9 @@ export async function enableAppointmentPush(): Promise<void> {
   if (saveError) throw saveError;
 }
 
+import { useEffect } from "react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { useRecords, type Payload } from "@/lib/work";
 
 export const REMIND_OPTIONS = [
