@@ -1,3 +1,7 @@
+import { useEffect } from "react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useRecords, type Payload } from "@/lib/work";
 
 function decodeVapidPublicKey(value: string): Uint8Array {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -13,7 +17,7 @@ function bufferToBase64Url(value: ArrayBuffer | null): string {
   const bytes = new Uint8Array(value);
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 /** Kullanıcının cihazını Supabase Web Push servisine kaydeder. */
@@ -56,10 +60,6 @@ export async function enableAppointmentPush(): Promise<void> {
   if (saveError) throw saveError;
 }
 
-import { useEffect } from "react";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { useRecords, type Payload } from "@/lib/work";
 
 export const REMIND_OPTIONS = [
   { value: "0", label: "Tam zamanında" },
