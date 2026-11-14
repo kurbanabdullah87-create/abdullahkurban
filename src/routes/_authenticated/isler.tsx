@@ -50,6 +50,7 @@ function Jobs() {
   const [form, setForm] = useState<Payload>({});
   const [filter, setFilter] = useState("Tümü");
   const [date, setDate] = useState(todayISO());
+  const [showProgress, setShowProgress] = useState(true);
   const [expanded, setExpanded] = useState<string>();
   const [now, setNow] = useState(Date.now());
   const [billing, setBilling] = useState(false);
