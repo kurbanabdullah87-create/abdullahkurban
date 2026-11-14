@@ -9,6 +9,9 @@ import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
   vite: {
+    // Vercel stores Supabase's browser-safe values as NEXT_PUBLIC_*.
+    // Expose only public-prefixed values to the client bundle.
+    envPrefix: ["VITE_", "NEXT_PUBLIC_"],
     plugins: [VitePWA({
       strategies: "generateSW", filename: "sw.js", registerType: "autoUpdate", injectRegister: null,
       devOptions: { enabled: false }, manifest: false,
