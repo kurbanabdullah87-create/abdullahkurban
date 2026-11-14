@@ -3,7 +3,8 @@ import { useState, useMemo } from "react";
 import {
   Building2, Plus, ArrowUpRight, ArrowDownLeft, CreditCard, Landmark,
   TrendingUp, Eye, EyeOff, ChevronRight, Wallet, PiggyBank, ArrowRightLeft,
-  FileText, Download, Calendar, Filter, Search, CheckCircle2, Clock, XCircle
+  FileText, Download, Calendar, Filter, Search, CheckCircle2, Clock, XCircle,
+  Trash2, Archive, Receipt
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/banka")({
 });
 
 type AccountType = "vadesiz" | "vadeli" | "kredi" | "yatirim";
-type TxType = "havale" | "eft" | "pos" | "atm" | "faiz" | "maas" | "fatura" | "diger";
+type TxType = "havale" | "eft" | "pos" | "atm" | "faiz" | "maas" | "fatura" | "diger" | "tahsilat" | "gider" | "is";
 
 interface BankAccount {
   id: string;
@@ -32,8 +33,8 @@ interface BankAccount {
   balance: number;
   currency: string;
   color: string;
-  limit?: number; // kredi kartı limiti
-  interestRate?: number; // faiz oranı
+  limit?: number;
+  interestRate?: number;
 }
 
 interface BankTx {
@@ -47,6 +48,7 @@ interface BankTx {
   balance: number;
   reference: string;
   status: "completed" | "pending" | "failed";
+  source?: "manual" | "gider" | "tahsilat" | "is" | "alim"; // hangi modülden geldi
 }
 
 const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
@@ -59,6 +61,7 @@ const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
 const TX_LABELS: Record<TxType, string> = {
   havale: "Havale", eft: "EFT", pos: "POS", atm: "ATM",
   faiz: "Faiz Geliri", maas: "Maaş", fatura: "Fatura Ödemesi", diger: "Diğer",
+  tahsilat: "Tahsilat", gider: "Gider", is: "İş/Hizmet",
 };
 
 const BANK_COLORS = ["#1e40af","#166534","#92400e","#7c3aed","#be123c","#0369a1"];
@@ -72,24 +75,97 @@ const DEMO_ACCOUNTS: BankAccount[] = [
 ];
 
 const DEMO_TXS: BankTx[] = [
-  { id: "t1", accountId: "acc1", date: todayISO(), desc: "İnek Süt Sağma Makinesi Alımı - Taksit 1/9", amount: 3450.00, type: "havale", direction: "out", balance: 48250.75, reference: genRef(), status: "completed" },
-  { id: "t2", accountId: "acc1", date: todayISO(), desc: "Müşteri Tahsilatı - Ahmet Yılmaz", amount: 7500.00, type: "havale", direction: "in", balance: 51700.75, reference: genRef(), status: "completed" },
-  { id: "t3", accountId: "acc1", date: todayISO(), desc: "Elektrik Faturası", amount: 890.50, type: "fatura", direction: "out", balance: 44200.75, reference: genRef(), status: "completed" },
-  { id: "t4", accountId: "acc2", date: todayISO(), desc: "EFT - Tedarikçi Ödemesi", amount: 12000.00, type: "eft", direction: "out", balance: 23100.00, reference: genRef(), status: "completed" },
-  { id: "t5", accountId: "acc2", date: todayISO(), desc: "Çalışan Maaşı - Mehmet", amount: 15000.00, type: "maas", direction: "out", balance: 35100.00, reference: genRef(), status: "pending" },
+  { id: "t1", accountId: "acc1", date: todayISO(), desc: "İnek Süt Sağma Makinesi Alımı - Taksit 1/9", amount: 3450.00, type: "havale", direction: "out", balance: 48250.75, reference: genRef(), status: "completed", source: "alim" },
+  { id: "t2", accountId: "acc1", date: todayISO(), desc: "Müşteri Tahsilatı - Ahmet Yılmaz", amount: 7500.00, type: "tahsilat", direction: "in", balance: 51700.75, reference: genRef(), status: "completed", source: "tahsilat" },
+  { id: "t3", accountId: "acc1", date: todayISO(), desc: "Elektrik Faturası", amount: 890.50, type: "gider", direction: "out", balance: 44200.75, reference: genRef(), status: "completed", source: "gider" },
+  { id: "t4", accountId: "acc2", date: todayISO(), desc: "EFT - Tedarikçi Ödemesi", amount: 12000.00, type: "eft", direction: "out", balance: 23100.00, reference: genRef(), status: "completed", source: "manual" },
+  { id: "t5", accountId: "acc2", date: todayISO(), desc: "Çalışan Maaşı - Mehmet", amount: 15000.00, type: "maas", direction: "out", balance: 35100.00, reference: genRef(), status: "pending", source: "manual" },
 ];
+
+// Makbuz görüntüleme componenti (IBAN'lı)
+function MakbuzModal({ tx, account, onClose }: { tx: BankTx; account?: BankAccount; onClose: () => void }) {
+  const ref = tx.reference;
+  const isIn = tx.direction === "in";
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><Receipt className="size-4" />İşlem Makbuzu</DialogTitle></DialogHeader>
+        <div className="space-y-3 text-sm">
+          <div className="rounded-xl bg-secondary p-4 space-y-2">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Makbuz No</span>
+              <span className="font-mono text-xs">{ref}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Tarih</span>
+              <span>{tx.date}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Tür</span>
+              <span className="rounded-full px-2 py-0.5 bg-background text-xs">{TX_LABELS[tx.type]}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Açıklama</span>
+              <span className="text-right max-w-[180px]">{tx.desc}</span>
+            </div>
+            <div className="border-t pt-2 flex justify-between items-center">
+              <span className="font-semibold">Tutar</span>
+              <span className={`font-bold text-lg num ${isIn ? "text-green-600" : "text-red-600"}`}>
+                {isIn ? "+" : "-"}{formatTL(tx.amount)}
+              </span>
+            </div>
+          </div>
+          {account && (
+            <div className="rounded-xl bg-secondary p-4 space-y-2">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Hesap Bilgisi</div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Banka</span>
+                <span>{account.bankName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Hesap</span>
+                <span>{account.accountName}</span>
+              </div>
+              {account.iban && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">IBAN</span>
+                  <span className="font-mono text-xs text-right">{account.iban}</span>
+                </div>
+              )}
+              {account.accountNo && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Hesap No</span>
+                  <span className="font-mono text-xs">{account.accountNo}</span>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="text-center text-[10px] text-muted-foreground opacity-60 pt-1">
+            Bu belge bilgi amaçlı makbuzdur. Resmi fatura yerine geçmez.
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function Banka() {
   const [accounts, setAccounts] = useState<BankAccount[]>(DEMO_ACCOUNTS);
   const [txs, setTxs] = useState<BankTx[]>(DEMO_TXS);
+  // Arşiv
+  const [archivedAccounts, setArchivedAccounts] = useState<BankAccount[]>([]);
+  const [archivedTxs, setArchivedTxs] = useState<BankTx[]>([]);
+  const [showArchive, setShowArchive] = useState(false);
+
   const [selectedAcc, setSelectedAcc] = useState<string | null>(null);
   const [showBalances, setShowBalances] = useState(true);
   const [addAccOpen, setAddAccOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [txOpen, setTxOpen] = useState(false);
-  const [tab, setTab] = useState<"hesaplar" | "islemler" | "transfer">("hesaplar");
+  const [tab, setTab] = useState<"hesaplar" | "islemler">("hesaplar");
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<string>("tümü");
+  const [makbuzTx, setMakbuzTx] = useState<BankTx | null>(null);
 
   const [accForm, setAccForm] = useState<Partial<BankAccount>>({});
   const [txForm, setTxForm] = useState<Partial<BankTx> & { accountId: string }>({ accountId: accounts[0]?.id ?? "", direction: "out" as const });
@@ -101,11 +177,11 @@ function Banka() {
 
   const selectedAccount = accounts.find(a => a.id === selectedAcc);
   const filteredTxs = useMemo(() => {
-    let list = txs.filter(t => selectedAcc ? t.accountId === selectedAcc : true);
+    let list = (showArchive ? archivedTxs : txs).filter(t => selectedAcc ? t.accountId === selectedAcc : true);
     if (search) list = list.filter(t => t.desc.toLowerCase().includes(search.toLowerCase()) || t.reference.includes(search));
     if (filterType !== "tümü") list = list.filter(t => t.direction === filterType || t.type === filterType || t.status === filterType);
     return list.sort((a, b) => b.date.localeCompare(a.date));
-  }, [txs, selectedAcc, search, filterType]);
+  }, [txs, archivedTxs, showArchive, selectedAcc, search, filterType]);
 
   function addAccount() {
     if (!accForm.bankName || !accForm.accountName) return toast.error("Banka adı ve hesap adı zorunludur");
@@ -128,6 +204,27 @@ function Banka() {
     toast.success("Hesap eklendi");
   }
 
+  // Hesap silme → arşive gönder
+  function deleteAccount(id: string) {
+    const acc = accounts.find(a => a.id === id);
+    if (!acc) return;
+    setArchivedAccounts(prev => [acc, ...prev]);
+    setArchivedTxs(prev => [...txs.filter(t => t.accountId === id), ...prev]);
+    setAccounts(prev => prev.filter(a => a.id !== id));
+    setTxs(prev => prev.filter(t => t.accountId !== id));
+    if (selectedAcc === id) setSelectedAcc(null);
+    toast.success("Hesap arşive taşındı");
+  }
+
+  // İşlem silme → arşive gönder
+  function deleteTx(id: string) {
+    const tx = txs.find(t => t.id === id);
+    if (!tx) return;
+    setArchivedTxs(prev => [tx, ...prev]);
+    setTxs(prev => prev.filter(t => t.id !== id));
+    toast.success("İşlem arşive taşındı");
+  }
+
   function addTx() {
     if (!txForm.desc || !txForm.amount || !txForm.accountId) return toast.error("Zorunlu alanları doldurun");
     const acc = accounts.find(a => a.id === txForm.accountId);
@@ -145,6 +242,7 @@ function Banka() {
       balance: newBalance,
       reference: genRef(),
       status: "completed",
+      source: "manual",
     };
     setTxs(prev => [newTx, ...prev]);
     setAccounts(prev => prev.map(a => a.id === acc.id ? { ...a, balance: newBalance } : a));
@@ -170,14 +268,24 @@ function Banka() {
     const ref = genRef();
     const today = todayISO();
     setTxs(prev => [
-      { id: crypto.randomUUID(), accountId: fromId, date: today, desc: `Transfer → ${to.accountName}: ${desc || ""}`, amount: amt, type: "havale", direction: "out", balance: from.balance - amt, reference: ref, status: "completed" },
-      { id: crypto.randomUUID(), accountId: toId, date: today, desc: `Transfer ← ${from.accountName}: ${desc || ""}`, amount: amt, type: "havale", direction: "in", balance: to.balance + amt, reference: ref, status: "completed" },
+      { id: crypto.randomUUID(), accountId: fromId, date: today, desc: `Transfer → ${to.accountName}: ${desc || ""}`, amount: amt, type: "havale", direction: "out", balance: from.balance - amt, reference: ref, status: "completed", source: "manual" },
+      { id: crypto.randomUUID(), accountId: toId, date: today, desc: `Transfer ← ${from.accountName}: ${desc || ""}`, amount: amt, type: "havale", direction: "in", balance: to.balance + amt, reference: ref, status: "completed", source: "manual" },
       ...prev,
     ]);
     setTransferForm({ fromId: "", toId: "", amount: "", desc: "" });
     setTransferOpen(false);
     toast.success("Transfer tamamlandı");
   }
+
+  const SOURCE_BADGE: Record<string, { label: string; color: string }> = {
+    gider: { label: "Gider", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
+    tahsilat: { label: "Tahsilat", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+    is: { label: "İş", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+    alim: { label: "Alım", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
+    manual: { label: "Manuel", color: "bg-secondary text-muted-foreground" },
+  };
+
+  const displayAccounts = showArchive ? archivedAccounts : accounts;
 
   return (
     <div className="space-y-4">
@@ -224,6 +332,22 @@ function Banka() {
         ))}
       </div>
 
+      {/* Arşiv toggle */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setShowArchive(v => !v)}
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${showArchive ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-secondary text-muted-foreground"}`}
+        >
+          <Archive className="size-3" />
+          {showArchive ? `Arşiv (${archivedAccounts.length} hesap, ${archivedTxs.length} işlem)` : "Arşivi Göster"}
+        </button>
+        {showArchive && (
+          <button onClick={() => setShowArchive(false)} className="text-xs text-muted-foreground underline">
+            Aktif hesaplara dön
+          </button>
+        )}
+      </div>
+
       {/* Tab Seçici */}
       <div className="flex gap-1 rounded-xl bg-secondary p-1">
         {(["hesaplar", "islemler"] as const).map(t => (
@@ -236,53 +360,68 @@ function Banka() {
 
       {tab === "hesaplar" && (
         <div className="space-y-3">
-          {accounts.map(acc => (
-            <button key={acc.id} onClick={() => { setSelectedAcc(acc.id === selectedAcc ? null : acc.id); setTab("islemler"); }}
-              className="w-full text-left rounded-2xl border bg-card p-4 active:scale-[0.98] transition-transform">
-              <div className="flex items-start gap-3">
-                <div className="rounded-xl p-2.5 mt-0.5" style={{ background: acc.color + "22" }}>
-                  {acc.type === "kredi" ? <CreditCard className="size-5" style={{ color: acc.color }} /> :
-                   acc.type === "yatirim" ? <TrendingUp className="size-5" style={{ color: acc.color }} /> :
-                   acc.type === "vadeli" ? <PiggyBank className="size-5" style={{ color: acc.color }} /> :
-                   <Wallet className="size-5" style={{ color: acc.color }} />}
+          {displayAccounts.map(acc => (
+            <div key={acc.id} className="rounded-2xl border bg-card overflow-hidden">
+              <button onClick={() => { setSelectedAcc(acc.id === selectedAcc ? null : acc.id); setTab("islemler"); }}
+                className="w-full text-left p-4 active:scale-[0.98] transition-transform">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-xl p-2.5 mt-0.5" style={{ background: acc.color + "22" }}>
+                    {acc.type === "kredi" ? <CreditCard className="size-5" style={{ color: acc.color }} /> :
+                     acc.type === "yatirim" ? <TrendingUp className="size-5" style={{ color: acc.color }} /> :
+                     acc.type === "vadeli" ? <PiggyBank className="size-5" style={{ color: acc.color }} /> :
+                     <Wallet className="size-5" style={{ color: acc.color }} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm">{acc.bankName}</span>
+                      <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-secondary text-muted-foreground">{ACCOUNT_TYPE_LABELS[acc.type]}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{acc.accountName}</div>
+                    {acc.iban && <div className="text-[10px] text-muted-foreground font-mono mt-1 opacity-60">{acc.iban}</div>}
+                    {acc.accountNo && <div className="text-[10px] text-muted-foreground font-mono opacity-50">No: {acc.accountNo}</div>}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className={`font-bold num ${acc.balance < 0 ? "text-destructive" : "text-foreground"}`}>
+                      {showBalances ? formatTL(acc.balance) : "••••"}
+                    </div>
+                    {acc.type === "kredi" && acc.limit && (
+                      <div className="text-[10px] text-muted-foreground">Limit: {formatTL(acc.limit)}</div>
+                    )}
+                    {acc.interestRate && (
+                      <div className="text-[10px] text-green-600">%{acc.interestRate} faiz</div>
+                    )}
+                    <ChevronRight className="size-3 text-muted-foreground ml-auto mt-1" />
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">{acc.bankName}</span>
-                    <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-secondary text-muted-foreground">{ACCOUNT_TYPE_LABELS[acc.type]}</span>
+                {acc.type === "kredi" && acc.limit && (
+                  <div className="mt-3">
+                    <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                      <span>Kullanılan</span>
+                      <span>{Math.round((Math.abs(acc.balance) / acc.limit) * 100)}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                      <div className="h-full rounded-full bg-destructive" style={{ width: `${Math.min(100, (Math.abs(acc.balance) / acc.limit) * 100)}%` }} />
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{acc.accountName}</div>
-                  {acc.iban && <div className="text-[10px] text-muted-foreground font-mono mt-1 opacity-60">{acc.iban}</div>}
-                </div>
-                <div className="text-right shrink-0">
-                  <div className={`font-bold num ${acc.balance < 0 ? "text-destructive" : "text-foreground"}`}>
-                    {showBalances ? formatTL(acc.balance) : "••••"}
-                  </div>
-                  {acc.type === "kredi" && acc.limit && (
-                    <div className="text-[10px] text-muted-foreground">Limit: {formatTL(acc.limit)}</div>
-                  )}
-                  {acc.interestRate && (
-                    <div className="text-[10px] text-green-600">%{acc.interestRate} faiz</div>
-                  )}
-                  <ChevronRight className="size-3 text-muted-foreground ml-auto mt-1" />
-                </div>
-              </div>
-              {acc.type === "kredi" && acc.limit && (
-                <div className="mt-3">
-                  <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-                    <span>Kullanılan</span>
-                    <span>{Math.round((Math.abs(acc.balance) / acc.limit) * 100)}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                    <div className="h-full rounded-full bg-destructive" style={{ width: `${Math.min(100, (Math.abs(acc.balance) / acc.limit) * 100)}%` }} />
-                  </div>
+                )}
+              </button>
+              {/* Silme butonu */}
+              {!showArchive && (
+                <div className="border-t px-4 py-2 flex justify-end">
+                  <button
+                    onClick={() => deleteAccount(acc.id)}
+                    className="flex items-center gap-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg px-2 py-1 transition-colors"
+                  >
+                    <Trash2 className="size-3" />
+                    Hesabı Sil (Arşive)
+                  </button>
                 </div>
               )}
-            </button>
+            </div>
           ))}
-          {accounts.length === 0 && (
+          {displayAccounts.length === 0 && (
             <div className="rounded-2xl border bg-card p-8 text-center text-sm text-muted-foreground">
-              Henüz hesap yok. "Hesap Ekle" ile başlayın.
+              {showArchive ? "Arşivde hesap yok." : "Henüz hesap yok. \"Hesap Ekle\" ile başlayın."}
             </div>
           )}
         </div>
@@ -323,7 +462,8 @@ function Banka() {
           ) : (
             <div className="space-y-2">
               {filteredTxs.map(tx => {
-                const acc = accounts.find(a => a.id === tx.accountId);
+                const acc = accounts.find(a => a.id === tx.accountId) ?? archivedAccounts.find(a => a.id === tx.accountId);
+                const srcBadge = SOURCE_BADGE[tx.source ?? "manual"];
                 return (
                   <div key={tx.id} className="rounded-2xl border bg-card p-3.5">
                     <div className="flex items-start gap-3">
@@ -337,6 +477,9 @@ function Banka() {
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
                           <span className="text-xs text-muted-foreground">{tx.date}</span>
                           <span className="text-xs rounded-full px-1.5 py-0.5 bg-secondary text-muted-foreground">{TX_LABELS[tx.type]}</span>
+                          {tx.source && tx.source !== "manual" && (
+                            <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${srcBadge.color}`}>{srcBadge.label}</span>
+                          )}
                           {acc && <span className="text-[10px] text-muted-foreground opacity-70">{acc.bankName}</span>}
                         </div>
                         <div className="flex items-center gap-1.5 mt-1">
@@ -352,6 +495,25 @@ function Banka() {
                           {tx.direction === "in" ? "+" : "-"}{formatTL(tx.amount)}
                         </div>
                         <div className="text-[10px] text-muted-foreground mt-0.5">Bakiye: {formatTL(tx.balance)}</div>
+                        {/* İşlem silme + makbuz */}
+                        {!showArchive && (
+                          <div className="flex gap-1 mt-1 justify-end">
+                            <button
+                              onClick={() => setMakbuzTx(tx)}
+                              className="rounded-lg p-1 hover:bg-secondary transition-colors"
+                              title="Makbuz"
+                            >
+                              <Receipt className="size-3 text-muted-foreground" />
+                            </button>
+                            <button
+                              onClick={() => deleteTx(tx.id)}
+                              className="rounded-lg p-1 hover:bg-destructive/10 transition-colors"
+                              title="Sil (Arşive)"
+                            >
+                              <Trash2 className="size-3 text-destructive" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -443,6 +605,21 @@ function Banka() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Makbuz Modal */}
+      {makbuzTx && (
+        <MakbuzModal
+          tx={makbuzTx}
+          account={accounts.find(a => a.id === makbuzTx.accountId)}
+          onClose={() => setMakbuzTx(null)}
+        />
+      )}
     </div>
   );
 }
+
+// Dışa aktarılan yardımcı: diğer sayfalar banka işlemi ekleyebilir
+// Kullanım: bankaTxEmitter.emit({ desc, amount, direction, type, source })
+// Bu basit bir event emitter pattern - gerçek uygulamada context/store kullanılır
+export type { BankTx };
+export { genRef };
