@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, PieChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ExpenseForm } from "@/components/app/forms/ExpenseForm";
 import { SwipeRow } from "@/components/app/SwipeRow";
@@ -37,6 +37,32 @@ function Expenses() {
         onChange={(e) => setMonth(e.target.value)}
         className="rounded-md border bg-secondary p-2"
       />
+      {/* Kategori özeti */}
+      {rows.length > 0 && (
+        <div className="rounded-2xl border bg-card p-3 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            <PieChart className="size-3" />Kategorilere Göre
+          </div>
+          {(Object.entries(EXPENSE_LABELS) as [import("@/lib/finance").ExpenseCategory, string][])
+            .map(([cat, label]) => {
+              const catTotal = rows.filter(e => e.category === cat).reduce((s, e) => s + e.amount, 0);
+              const pct = rows.reduce((s, e) => s + e.amount, 0);
+              if (!catTotal) return null;
+              return (
+                <div key={cat} className="space-y-0.5">
+                  <div className="flex justify-between text-xs">
+                    <span>{label}</span>
+                    <span className="num text-muted-foreground">{formatTL(catTotal)}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                    <div className="h-full rounded-full bg-destructive/60" style={{ width: \`\${Math.round((catTotal / pct) * 100)}%\` }} />
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      )}
+
       <p className="num text-2xl text-destructive">
         {formatTL(rows.reduce((s, e) => s + e.amount, 0))}
       </p>
