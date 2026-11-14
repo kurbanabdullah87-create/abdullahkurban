@@ -55,7 +55,7 @@ function Expenses() {
                     <span className="num text-muted-foreground">{formatTL(catTotal)}</span>
                   </div>
                   <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                    <div className="h-full rounded-full bg-destructive/60" style={{ width: \`\${Math.round((catTotal / pct) * 100)}%\` }} />
+                    <div className="h-full rounded-full bg-destructive/60" style={{ width: `${Math.round((catTotal / pct) * 100)}%` }} />
                   </div>
                 </div>
               );
