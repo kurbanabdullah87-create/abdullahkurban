@@ -13,6 +13,7 @@ export default defineConfig({
       strategies: "generateSW", filename: "sw.js", registerType: "autoUpdate", injectRegister: null,
       devOptions: { enabled: false }, manifest: false,
       workbox: {
+        importScripts: ["/push-handler.js"],
         globPatterns: ["**/*.{js,css,png,ico,ttf,webmanifest}"],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallback: null,
