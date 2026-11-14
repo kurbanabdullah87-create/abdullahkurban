@@ -67,6 +67,8 @@ function WeatherWidget() {
 
 function Panel() {
   const [month, setMonth] = useState(monthKey(todayISO()));
+  const [quickNote, setQuickNote] = useState(() => { try { return localStorage.getItem("panel_note") ?? ""; } catch { return ""; } });
+  const saveNote = (v: string) => { setQuickNote(v); try { localStorage.setItem("panel_note", v); } catch {} };
   const txs = useTransactions();
   const exps = useExpenses();
   const customers = useCustomers();
@@ -99,6 +101,21 @@ function Panel() {
 
   return (
     <div className="space-y-5">
+      {/* Hızlı Not */}
+      <div className="rounded-2xl border bg-amber-50 dark:bg-amber-950/20 p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-sm">📝</span>
+          <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide">Hızlı Not</span>
+        </div>
+        <textarea
+          value={quickNote}
+          onChange={e => saveNote(e.target.value)}
+          placeholder="Bugün için notunuzu buraya yazın..."
+          className="w-full bg-transparent text-sm resize-none outline-none text-foreground placeholder:text-muted-foreground min-h-[60px]"
+          rows={3}
+        />
+      </div>
+
       <MaintenanceAlerts />
       <WeatherWidget />
       <div className="flex items-center justify-between">
