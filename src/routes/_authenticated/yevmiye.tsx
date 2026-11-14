@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, Banknote, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Banknote, ChevronLeft, ChevronRight, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormDrawer } from "@/components/app/forms/FormDrawer";
 import { RecordFields, type Field } from "@/components/app/RecordFields";
@@ -56,6 +56,10 @@ function Payroll() {
     0,
   );
   const advanced = av.reduce((s, r) => s + Number(r.payload.amount), 0);
+
+  const net = earned - advanced;
+  const targetMonthly = 25000; // hedef aylık kazanç (ayarlanabilir)
+  const pct = Math.min(100, Math.round((net / targetMonthly) * 100));
 
   function add(k: "payroll" | "advance", date = todayISO()) {
     setKind(k);
@@ -125,6 +129,28 @@ function Payroll() {
           ))}
         </select>
       )}
+      {/* Net kazanç özet kartı */}
+      <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-4 text-white">
+        <div className="flex items-center gap-2 mb-2">
+          <TrendingUp className="size-4 opacity-80" />
+          <span className="text-sm font-medium opacity-80">{month} · Net Kazanç</span>
+        </div>
+        <div className="text-3xl font-bold num mb-1">{formatTL(net)}</div>
+        <div className="flex gap-4 text-xs opacity-80 mb-3">
+          <span>Hak edilen: {formatTL(earned)}</span>
+          <span>Avans: -{formatTL(advanced)}</span>
+        </div>
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs opacity-70">
+            <span>Hedef: {formatTL(targetMonthly)}</span>
+            <span>%{pct}</span>
+          </div>
+          <div className="h-2 rounded-full bg-white/20 overflow-hidden">
+            <div className="h-full rounded-full bg-white/80 transition-all" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="icon" aria-label="Önceki ay" onClick={() => shift(-1)}>
           <ChevronLeft />
