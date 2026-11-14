@@ -83,13 +83,14 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' })
       throw new Error('Unauthorized: Only Bearer tokens are supported');
     }
 
-    const token = authHeader.replace('Bearer ', '');
+    const token = authHeader.slice('Bearer '.length).trim();
     if (!token) {
       throw new Error('Unauthorized: No token provided');
     }
 
-    if (token.split('.').length !== 3) {
-      throw new Error('Unauthorized: Invalid token');
+    // A Supabase access token is a JWT. Never accept an API key as a user session.
+    if (token.split('.').length !== 3 || isNewSupabaseApiKey(token)) {
+      throw new Error('Unauthorized: Invalid session token format');
     }
 
     const supabase = createClient<Database>(
@@ -110,20 +111,24 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' })
       }
     );
 
-    const { data, error } = await supabase.auth.getClaims(token);
-    if (error || !data?.claims) {
-      throw new Error('Unauthorized: Invalid token');
-    }
-
-    if (!data.claims.sub) {
-      throw new Error('Unauthorized: No user ID found in token');
+    // Ask the project's Auth server to verify the user's access token.
+    // This works for both legacy symmetric and newer asymmetric JWT signing keys.
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data.user) {
+      console.error('[Supabase] Server-function session verification failed', {
+        status: error?.status,
+        code: error?.code,
+        message: error?.message,
+        projectHost: new URL(SUPABASE_URL).host,
+      });
+      throw new Error('Unauthorized: Supabase could not verify this session. Sign out and sign in again.');
     }
 
     return next({
       context: {
         supabase,
-        userId: data.claims.sub,
-        claims: data.claims,
+        userId: data.user.id,
+        claims: { sub: data.user.id },
       },
     });
   },
