@@ -1,29 +1,41 @@
 export async function initializeOffline() {
   if (!("serviceWorker" in navigator)) return;
-  const h = location.hostname;
+
+  const host = location.hostname;
   const blocked =
     !import.meta.env.PROD ||
     window.self !== window.top ||
-    h.startsWith("id-preview--") ||
-    h.startsWith("preview--") ||
+    host.startsWith("id-preview--") ||
+    host.startsWith("preview--") ||
     ["lovableproject.com", "lovableproject-dev.com", "beta.lovable.dev"].some(
-      (d) => h === d || h.endsWith("." + d),
+      (domain) => host === domain || host.endsWith("." + domain),
     ) ||
     new URLSearchParams(location.search).get("sw") === "off";
+
   if (blocked) {
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(
       registrations
-        .filter((r) =>
-          [r.active, r.installing, r.waiting].some(
-            (w) => w && new URL(w.scriptURL).pathname === "/sw.js",
+        .filter((registration) =>
+          [registration.active, registration.installing, registration.waiting].some(
+            (worker) => worker && new URL(worker.scriptURL).pathname === "/sw.js",
           ),
         )
-        .map((r) => r.unregister()),
+        .map((registration) => registration.unregister()),
     );
     return;
   }
-  const { Workbox } = await import("workbox-window");
-  const wb = new Workbox("/sw.js");
-  void wb.register();
+
+  try {
+    const registration = await navigator.serviceWorker.register("/sw.js", {
+      scope: "/",
+      updateViaCache: "none",
+    });
+    // Check for a new worker when the app is opened, without blocking app startup.
+    void registration.update().catch((error) => {
+      console.warn("[PWA] Service worker update check failed", error);
+    });
+  } catch (error) {
+    console.error("[PWA] Service worker registration failed", error);
+  }
 }
