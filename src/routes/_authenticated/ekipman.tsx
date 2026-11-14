@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, Play, Pause, Wrench, ScanLine, Check, ArrowRightLeft } from "lucide-react";
+import { Plus, Play, Pause, Wrench, ScanLine, Check, ArrowRightLeft, AlertTriangle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormDrawer } from "@/components/app/forms/FormDrawer";
@@ -20,6 +20,13 @@ import {
   type Payload,
   type WorkRecord,
 } from "@/lib/work";
+
+function daysSince(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  const d = Date.parse(String(dateStr));
+  if (!isFinite(d)) return null;
+  return Math.floor((Date.now() - d) / 86_400_000);
+}
 import { todayISO, formatTL, formatDate } from "@/lib/finance";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -243,9 +250,21 @@ function Equipment() {
                     {mine.length} iş · kazandırdığı {formatTL(earned)}{price > 0 ? ` · geri dönüş %${Math.round((earned / price) * 100)}` : ""}
                   </p>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  Son bakımdan sonra {m.used.toFixed(2)} / {p.maintenance_hours} saat · {m.remaining >= 0 ? `${m.remaining.toFixed(1)} saat kaldı` : `${(-m.remaining).toFixed(1)} saat gecikti`}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    Son bakımdan sonra {m.used.toFixed(2)} / {p.maintenance_hours} saat · {m.remaining >= 0 ? `${m.remaining.toFixed(1)} saat kaldı` : `${(-m.remaining).toFixed(1)} saat gecikti`}
+                  </p>
+                  {(() => {
+                    const days = daysSince(p.last_maintenance_date ?? p.last_serviced_at);
+                    if (days === null) return null;
+                    return (
+                      <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${days > 60 ? "bg-destructive/15 text-destructive" : days > 30 ? "bg-warning/15 text-warning" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}`}>
+                        <Clock className="size-2.5" />
+                        {days}g önce bakım
+                      </span>
+                    );
+                  })()}
+                </div>
                 {p.borrower && (
                   <p className="text-warning text-sm">
                     {p.borrower} · {p.borrowed_on ? formatDate(String(p.borrowed_on)) : ""}

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, useCallback } from "react";
-import { MapPin, RefreshCw, Droplets, Wind, Eye, Sunrise, Sunset, Thermometer, ArrowLeft } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { MapPin, RefreshCw, Droplets, Wind, Eye, Sunrise, Sunset, Thermometer, ArrowLeft, Search, X } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { fetchWeather, wmo, DEFAULT_LOCATION, type WeatherData } from "@/lib/weather";
 import { pageHead } from "@/lib/work";
@@ -10,11 +10,37 @@ export const Route = createFileRoute("/_authenticated/hava")({
   component: HavaDurumu,
 });
 
+// Open-Meteo geocoding API - ücretsiz, Türkiye il/ilçe arama
+async function searchLocation(query: string): Promise<{ name: string; lat: number; lon: number; region: string }[]> {
+  if (!query.trim()) return [];
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=6&language=tr&country_code=TR`;
+  try {
+    const r = await fetch(url);
+    const d = await r.json();
+    return (d.results ?? []).map((x: { name: string; latitude: number; longitude: number; admin1?: string; admin2?: string }) => ({
+      name: [x.name, x.admin2, x.admin1].filter(Boolean).join(", "),
+      lat: x.latitude,
+      lon: x.longitude,
+      region: x.admin1 ?? "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+const LOC_KEY = "saha_weather_loc";
+
 function HavaDurumu() {
   const [data, setData] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [loc, setLoc] = useState(DEFAULT_LOCATION);
+  // Arama
+  const [searchQ, setSearchQ] = useState("");
+  const [searchResults, setSearchResults] = useState<{ name: string; lat: number; lon: number; region: string }[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async (lat: number, lon: number, name: string) => {
     setLoading(true);
@@ -29,7 +55,20 @@ function HavaDurumu() {
     }
   }, []);
 
+  // Kayıtlı konumu yükle (hafıza)
   useEffect(() => {
+    const saved = localStorage.getItem(LOC_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.lat && parsed.lon && parsed.name) {
+          setLoc(parsed);
+          void load(parsed.lat, parsed.lon, parsed.name);
+          return;
+        }
+      } catch { /* ignore */ }
+    }
+    // Kayıtlı yoksa konuma bak
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -44,6 +83,29 @@ function HavaDurumu() {
       void load(loc.lat, loc.lon, loc.name);
     }
   }, []);
+
+  // Arama debounce
+  useEffect(() => {
+    if (!searchQ.trim()) { setSearchResults([]); return; }
+    if (searchRef.current) clearTimeout(searchRef.current);
+    setSearchLoading(true);
+    searchRef.current = setTimeout(async () => {
+      const results = await searchLocation(searchQ);
+      setSearchResults(results);
+      setSearchLoading(false);
+    }, 400);
+    return () => { if (searchRef.current) clearTimeout(searchRef.current); };
+  }, [searchQ]);
+
+  function selectLocation(r: { name: string; lat: number; lon: number }) {
+    const newLoc = { name: r.name, lat: r.lat, lon: r.lon };
+    setLoc(newLoc);
+    localStorage.setItem(LOC_KEY, JSON.stringify(newLoc));
+    setSearchQ("");
+    setSearchResults([]);
+    setShowSearch(false);
+    void load(r.lat, r.lon, r.name);
+  }
 
   const bgGrad = data
     ? data.current.isDay
@@ -81,7 +143,55 @@ function HavaDurumu() {
         <Link to="/panel" className="rounded-full p-1.5 bg-white/20 text-white">
           <ArrowLeft className="size-4" />
         </Link>
-        <div className="flex-1" />
+        {/* Arama Kutusu */}
+        <div className="flex-1 relative">
+          {showSearch ? (
+            <div className="flex items-center gap-2 rounded-full bg-white/25 backdrop-blur-sm px-3 py-1.5">
+              <Search className="size-4 text-white/70 shrink-0" />
+              <input
+                autoFocus
+                value={searchQ}
+                onChange={e => setSearchQ(e.target.value)}
+                placeholder="İl veya ilçe ara..."
+                className="flex-1 bg-transparent text-white placeholder:text-white/60 text-sm outline-none"
+              />
+              <button onClick={() => { setShowSearch(false); setSearchQ(""); setSearchResults([]); }} className="text-white/70">
+                <X className="size-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowSearch(true)}
+              className="w-full flex items-center gap-2 rounded-full bg-white/20 px-3 py-1.5 text-white/80 text-sm"
+            >
+              <Search className="size-4" />
+              <span className="truncate">{loc.name}</span>
+            </button>
+          )}
+          {/* Arama sonuçları */}
+          {showSearch && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 rounded-2xl bg-white/95 backdrop-blur-sm shadow-xl overflow-hidden z-50">
+              {searchLoading && (
+                <div className="px-4 py-2 text-xs text-gray-500">Aranıyor...</div>
+              )}
+              {searchResults.map((r, i) => (
+                <button
+                  key={i}
+                  onClick={() => selectLocation(r)}
+                  className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0 flex items-center gap-2"
+                >
+                  <MapPin className="size-3.5 text-blue-500 shrink-0" />
+                  <span className="text-sm text-gray-800">{r.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {showSearch && searchQ && searchResults.length === 0 && !searchLoading && (
+            <div className="absolute top-full left-0 right-0 mt-1 rounded-2xl bg-white/95 p-3 shadow-xl z-50">
+              <p className="text-xs text-gray-500 text-center">Sonuç bulunamadı</p>
+            </div>
+          )}
+        </div>
         <button
           onClick={() => void load(loc.lat, loc.lon, loc.name)}
           className="rounded-full p-1.5 bg-white/20 text-white active:scale-95"
@@ -90,7 +200,7 @@ function HavaDurumu() {
         </button>
       </div>
 
-      {/* Ana Kart - Google tarzı büyük gösterim */}
+      {/* Ana Kart */}
       <div className="px-4 pt-2 pb-4 text-white text-center">
         <div className="flex items-center justify-center gap-1.5 mb-1">
           <MapPin className="size-4 opacity-80" />
