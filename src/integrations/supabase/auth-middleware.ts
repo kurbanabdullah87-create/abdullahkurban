@@ -3,6 +3,7 @@ import { createMiddleware } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './types'
+import { supabase } from './client'
 
 
 
@@ -31,7 +32,25 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
-export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server(
+export const requireSupabaseAuth = createMiddleware({ type: 'function' })
+  .client(async ({ next }) => {
+    // Server functions do not automatically receive the browser's Supabase session.
+    // Attach the current user's access token explicitly to the RPC request.
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      throw new Error('Unauthorized: Could not read the current session');
+    }
+    const accessToken = data.session?.access_token;
+    if (!accessToken) {
+      throw new Error('Unauthorized: No valid session found');
+    }
+    return next({
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  })
+  .server(
   async ({ next }) => {
     
     const SUPABASE_URL = process.env['SUPABASE_URL'];
