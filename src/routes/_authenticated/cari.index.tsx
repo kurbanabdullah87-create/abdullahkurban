@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ChevronRight, UserPlus } from "lucide-react";
+import { ChevronRight, UserPlus, Search, TrendingUp, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SwipeRow } from "@/components/app/SwipeRow";
 import { CustomerForm } from "@/components/app/forms/CustomerForm";
@@ -18,10 +18,13 @@ function CariList() {
   const txs = useTransactions();
   const del = useUndoableDelete("customers");
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
 
   const rows = useMemo(
     () =>
-      (customers.data ?? []).map((c) => {
+      (customers.data ?? [])
+        .filter(c => !q || c.name.toLocaleLowerCase("tr-TR").includes(q.toLocaleLowerCase("tr-TR")))
+        .map((c) => {
         const ct = (txs.data ?? []).filter((t) => t.customer_id === c.id);
         return { c, balance: customerBalance(ct), overdue: overdueAmount(ct) };
       }),
@@ -31,6 +34,31 @@ function CariList() {
 
   return (
     <div className="space-y-4">
+      {/* Özet kartlar */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-2xl border bg-card p-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1"><TrendingUp className="size-3 text-warning" />Toplam Alacak</div>
+          <div className="num font-bold text-warning">{formatTL(total)}</div>
+          <div className="text-[10px] text-muted-foreground">{rows.filter(r => r.balance > 0).length} müşteri</div>
+        </div>
+        <div className="rounded-2xl border bg-card p-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1"><TrendingDown className="size-3 text-green-600" />Toplam Ödenmiş</div>
+          <div className="num font-bold text-green-600">{formatTL(rows.reduce((s,r) => s + Math.max(0, -r.balance), 0))}</div>
+          <div className="text-[10px] text-muted-foreground">{rows.filter(r => r.balance <= 0).length} müşteri</div>
+        </div>
+      </div>
+
+      {/* Arama */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <input
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          placeholder="Müşteri ara..."
+          className="w-full h-10 pl-9 pr-3 rounded-xl border bg-secondary text-sm outline-none"
+        />
+      </div>
+
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-bold">Cari hesaplar</h1>
